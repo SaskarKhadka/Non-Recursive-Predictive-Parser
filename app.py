@@ -1,18 +1,11 @@
 import pandas as pd
 import copy
 from stack import Stack
-
-"""
-S  -> ABC
-A  -> abA'
-A' -> A | ε
-B  -> bB'
-B' -> cB' | ε
-C  -> cC'
-C' -> C | ε
-"""
+from flask import Flask, request, render_template, redirect, url_for
 
 EPSILON = "ε"
+
+app = Flask(__name__)
 
 
 class NonRecursivePredictiveParser:
@@ -89,6 +82,9 @@ class NonRecursivePredictiveParser:
                         )
 
     def compute_first(self):
+        """
+        Computes the first set for each non-terminal of the grammar
+        """
         for rule in self.__cfg.items():
             lhs, rhs = rule
             first_elements = []
@@ -135,14 +131,26 @@ class NonRecursivePredictiveParser:
                                 follow_elements += self.__follow_set[rule[0]]
 
     def create_parsing_table(self):
+        """
+        Uses the first and follow sets to compute the parsing table
+        """
         self.__init_parsing_table()
+        valid = True
         for production, rule in self.__first_set_rules.items():
             production = production.split("=")
             if production[1] == "ε":
                 for each in self.__follow_set[production[0]]:
-                    self.__parsing_table[production[0]][each] = rule
+                    if self.__parsing_table[production[0]][each] == None:
+                        self.__parsing_table[production[0]][each] = rule
+                    else:
+                        self.__parsing_table[production[0]][each] = [
+                            self.__parsing_table[production[0]][each]
+                        ]
+                        self.__parsing_table[production[0]][each].append(rule)
+                        valid = False
                 continue
             self.__parsing_table[production[0]][production[1]] = rule
+        return valid
 
     def __init_parsing_table(self):
         for non_terminal in self.__non_terminals:
@@ -153,10 +161,13 @@ class NonRecursivePredictiveParser:
                 self.__parsing_table[non_terminal][terminal] = None
 
     def compute_follow(self):
+        """
+        Computes follow set for each non-terminal in the grammar
+        """
         for rule in self.__cfg.items():
             lhs, rhs = rule
             self.__follow_set[lhs] = []
-            if lhs == start_symbol:
+            if lhs == self.__start_symbol:
                 self.__follow_set[lhs].append("$")
             follow_elements = []
             self.__compute_follow_helper(lhs, follow_elements)
@@ -203,6 +214,7 @@ class NonRecursivePredictiveParser:
                         string_stack.peek()
                     ]
                     top = rule_stack.pop()
+
                     if EPSILON not in update_rule:
                         for x in reversed(update_rule):
                             rule_stack.push(x)
@@ -227,7 +239,7 @@ class NonRecursivePredictiveParser:
         """
         rule_stack = Stack()
         rule_stack.push("$")
-        rule_stack.push(start_symbol)
+        rule_stack.push(self.__start_symbol)
         string_stack = self.__stack_string(string)
         self.__string_check_table.append(
             [" ", "".join(rule_stack.values()), "".join(string_stack.values()), " "]
@@ -237,23 +249,123 @@ class NonRecursivePredictiveParser:
         return result
 
 
-cfg = {
-    "E": [["T", "E'"]],
-    "E'": [["+", "T", "E'"], ["ε"]],
-    "T": [["F", "T'"]],
-    "T'": [["*", "F", "T'"], ["ε"]],
-    "F": [["(", "E", ")"], ["id"]],
-}
+@app.route("/", methods=["GET"])
+def home():
+    if request.method == "GET":
+        return render_template("index.html")
 
-non_terminals = ["E", "E'", "T", "T'", "F"]
-terminals = ["+", "*", "(", ")", "id", "ε"]
-start_symbol = "E"
 
-parser = NonRecursivePredictiveParser(cfg, terminals, non_terminals, start_symbol)
-parser.compute_first()
-parser.compute_follow()
-print(parser.get_first_follow_sets())
-parser.create_parsing_table()
-print(parser.get_parsing_table())
-print(parser.check_string(["id", "+", "id", "*", "id"]))
-print(parser.get_string_check_steps())
+@app.route("/parse", methods=["POST"])
+def parse_grammar():
+    cfg = request.form["cfg-to-parse"]
+    terminal_symbols = request.form["terminals"]
+    non_terminal_symbols = request.form["non-terminals"]
+    start_symbol = request.form["start-symbol"]
+    string = request.form["string-to-check"]
+
+    terminal_symbols = [x.strip() for x in terminal_symbols.split(",")]
+    non_terminal_symbols = [x.strip() for x in non_terminal_symbols.split(",")]
+    start_symbol = start_symbol.strip()
+    string = [x.strip() for x in string.strip().split(",")]
+    cfg = [x.strip() for x in cfg.split(",")]
+
+    cfg_edited = {}
+    for each in cfg:
+        lhs, rhs = each.split("->")
+        rules = rhs.split("|")
+        cfg_edited[lhs.strip()] = []
+        for rule in rules:
+            cfg_edited[lhs.strip()].append(rule.strip().split())
+
+    print(cfg_edited)
+    parser = NonRecursivePredictiveParser(
+        cfg_edited, terminal_symbols, non_terminal_symbols, start_symbol
+    )
+    parser.compute_first()
+    parser.compute_follow()
+    first_follow_set = parser.get_first_follow_sets()
+    is_valid = parser.create_parsing_table()
+    if not is_valid:
+        return render_template(
+            "parse.html",
+            first_follow_set=[
+                first_follow_set.to_html(
+                    columns=["First", "Follow"],
+                    border=2,
+                    col_space=100,
+                    classes="table",
+                )
+            ],
+            parsing_table=[
+                parser.get_parsing_table().to_html(
+                    border=2, col_space=100, classes="table"
+                )
+            ],
+            is_valid=False,
+            is_correct=None,
+            check_steps=None,
+        )
+    parsing_table = parser.get_parsing_table()
+    is_correct = parser.check_string(string)
+    check_steps = parser.get_string_check_steps()
+
+    return render_template(
+        "parse.html",
+        first_follow_set=[
+            first_follow_set.to_html(
+                columns=["First", "Follow"], border=2, col_space=100, classes="table"
+            )
+        ],
+        cfg=cfg_edited,
+        parsing_table=[parsing_table.to_html(border=2, col_space=100, classes="table")],
+        is_valid=True,
+        string=string,
+        is_correct=is_correct,
+        check_steps=[check_steps.to_html(border=2, col_space=100, classes="table")],
+    )
+
+
+# cfg = {
+#     "E": [["T", "E'"]],
+#     "E'": [["+", "T", "E'"], ["ε"]],
+#     "T": [["F", "T'"]],
+#     "T'": [["*", "F", "T'"], ["ε"]],
+#     "F": [["(", "E", ")"], ["id"]],
+# }
+
+# cfg = {
+#     "S": [["A", "B", "C"]],
+#     "A": [["a", "b", "A'"]],
+#     "A'": [["A"], ["ε"]],
+#     "B": [["b", "B'"]],
+#     "B'": [["C", "B'"], ["ε"]],
+#     "C": [["c", "C'"]],
+#     "C'": [["C"], ["ε"]],
+# }
+
+# non_terminals = ["E", "E'", "T", "T'", "F"]
+# terminals = ["+", "*", "(", ")", "id", "ε"]
+# start_symbol = "E"
+# non_terminals = ["S", "A", "A'", "B", "B'", "C", "C'"]
+# terminals = ["a", "b", "c", "ε"]
+# start_symbol = "S"
+
+# parser = NonRecursivePredictiveParser(cfg, terminals, non_terminals, start_symbol)
+# parser.compute_first()
+# parser.compute_follow()
+# print(parser.get_first_follow_sets())
+# is_valid = parser.create_parsing_table()
+# if not is_valid:
+#     print("Grammer is not valid for top down parsing")
+# print(parser.get_parsing_table())
+# print(parser.check_string(["id", "+", "id", "*", "id"]))
+# print(parser.get_string_check_steps())
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+# E -> T E, E' -> + T E' | ε, T -> F T', T' -> * F T' | ε, F -> ( E ) | id
+# E,E',T,T',F
+# +,*,(,),ε,id
+# E
+# abbcc

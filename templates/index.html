@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Non Recursive Predictive Parser</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM"
+      crossorigin="anonymous"
+    />
+    <style>
+      html,
+      body {
+        margin-left: 4%;
+        margin-right: 10%;
+        margin-top: 5%;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Non Recursive Predictive Parser</h2>
+    <form action="/parse" method="POST">
+      <div class="mb-3">
+        <label for="exampleInputEmail1" class="form-label">Enter CFG</label>
+        <input
+          type="text"
+          class="form-control"
+          id="grammar-sample"
+          name="cfg-to-parse"
+          aria-describedby="emailHelp"
+        />
+
+        <br />
+        <label for="exampleInputEmail1" class="form-label"
+          >Enter Terminal Symbols</label
+        >
+        <input
+          type="text"
+          class="form-control"
+          id="terminals-smaple"
+          name="terminals"
+          aria-describedby="emailHelp"
+        />
+        <br />
+        <label for="exampleInputEmail1" class="form-label"
+          >Enter Non Terminal Symbols</label
+        >
+        <input
+          type="text"
+          class="form-control"
+          id="non-terminal-smaple"
+          name="non-terminals"
+          aria-describedby="emailHelp"
+        />
+        <br />
+        <label for="exampleInputEmail1" class="form-label"
+          >Enter Start Symbol</label
+        >
+        <input
+          type="text"
+          class="form-control"
+          id="start-symbol-smaple"
+          name="start-symbol"
+          aria-describedby="emailHelp"
+        />
+        <br />
+        <label for="exampleInputEmail1" class="form-label">Enter String</label>
+        <input
+          type="text"
+          class="form-control"
+          id="string-smaple"
+          name="string-to-check"
+          aria-describedby="emailHelp"
+        />
+      </div>
+      <button type="submit" class="btn btn-primary">Parse</button>
+      <br />
+      <br />
+      <h5>{{ prediction|capitalize }}</h5>
+    </form>
+  </body>
+</html>
